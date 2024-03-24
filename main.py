@@ -5,7 +5,7 @@ import streamlit as st
 import yfinance as yf
 import matplotlib.pyplot as plt
 from openai import OpenAI
-import openai
+from alpha_vantage.timeseries import TimeSeries
 
 from dotenv import load_dotenv
 
@@ -51,6 +51,36 @@ def plot_stock_price(ticker):
     plt.grid(True)
     plt.savefig("stock_price.png")
     plt.close()
+
+def compare_stock_price(ticker1, ticker2):
+    # Initialize Alpha Vantage API with your API key
+    api_key = 'YOUR_API_KEY'
+    ts = TimeSeries(key=api_key, output_format='pandas')
+    
+    # Retrieve historical stock data for the tickers
+    data1, meta_data1 = ts.get_daily(symbol=ticker1, outputsize='compact')
+    data2, meta_data2 = ts.get_daily(symbol=ticker2, outputsize='compact')
+    
+    # Plotting the stock prices
+    plt.figure(figsize=(10, 6))
+    plt.plot(data1.index, data1['4. close'], label=ticker1)
+    plt.plot(data2.index, data2['4. close'], label=ticker2)
+    plt.title('Stock Price Comparison')
+    plt.xlabel('Date')
+    plt.ylabel('Price (USD)')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig("stock_comparison.png")
+    plt.close()
+    
+    # Outputting summary statistics
+    st.text("Summary Statistics:")
+    st.text("--------------------")
+    st.text(f"{ticker1} Mean Price: {data1['4. close'].mean()}")
+    st.text(f"{ticker2} Mean Price: {data2['4. close'].mean()}")
+    st.text(f"{ticker1} Standard Deviation: {data1['4. close'].std()}")
+    st.text(f"{ticker2} Standard Deviation: {data2['4. close'].std()}")
+
 
 functions = [
     {
@@ -148,17 +178,37 @@ functions = [
             },
             'required': ['ticker']
         },
+
+    },
+    {
+        "name": "compare_stock_price",
+        "description": "Compare the stock prices of two companies and provide a detailed comparison with charts and tables",
+        "parameters": {
+            'type': 'object',
+            'properties': {
+            'ticker1': {
+                'type': 'string',
+                'description': 'The ticker symbol of the first company'
+            },
+            'ticker2': {
+                'type': 'string',
+                'description': 'The ticker symbol of the second company'
+            }
+            },
+            'required': ['ticker1', 'ticker2']
+        }
     }
 ]
-
+        
 available_functions = {
-    'get_stock_price': get_stock_price,
-    'calculate_SMA': calculate_SMA,
-    'calculate_EMA': calculate_EMA,
-    'calculate_RSI': calculate_RSI,
-    'calculate_MACD': calculate_MACD,
-    'plot_stock_price': plot_stock_price
-}
+        'get_stock_price': get_stock_price,
+        'calculate_SMA': calculate_SMA,
+        'calculate_EMA': calculate_EMA,
+        'calculate_RSI': calculate_RSI,
+        'calculate_MACD': calculate_MACD,
+        'plot_stock_price': plot_stock_price,
+        'compare_stock_price': compare_stock_price
+    }
 
 if 'messages' not in st.session_state:
     st.session_state.messages = []
@@ -186,12 +236,16 @@ if user_input:
                 args_dict = {'ticker': function_args.get('ticker')}
             elif function_name in ['calculate_SMA', 'calculate_EMA', 'calculate_RSI']:
                 args_dict = {'ticker': function_args.get('ticker'), 'window': function_args.get('window')}
+            elif function_name == 'compare_stock_price':
+                args_dict = {'ticker1': function_args.get('ticker1'), 'ticker2': function_args.get('ticker2')}
             
             function_to_call = available_functions[function_name]
             function_response = function_to_call(**args_dict)
 
             if function_name == 'plot_stock_price':
                 st.image("stock_price.png")
+            elif function_name == 'compare_stock_price':
+                st.image("stock_comparison.png")
             else:
                 st.session_state['messages'].append(response_message)
                 st.session_state['messages'].append({"role": "function", "name": function_name, "content": f'{function_response}'})
